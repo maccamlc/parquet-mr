@@ -18,35 +18,61 @@
  */
 package org.apache.parquet.format.converter;
 
-import static java.util.Collections.emptyList;
-import static org.apache.parquet.format.converter.ParquetMetadataConverter.filterFileMetaDataByStart;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MICROS;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.NANOS;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.bsonType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.dateType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.decimalType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.enumType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.intType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.jsonType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.listType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.mapType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.stringType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.timeType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.timestampType;
-import static org.apache.parquet.schema.MessageTypeParser.parseMessageType;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.apache.parquet.format.CompressionCodec.UNCOMPRESSED;
-import static org.apache.parquet.format.Type.INT32;
-import static org.apache.parquet.format.Util.readPageHeader;
-import static org.apache.parquet.format.Util.writePageHeader;
-import static org.apache.parquet.format.converter.ParquetMetadataConverter.filterFileMetaDataByMidpoint;
-import static org.apache.parquet.format.converter.ParquetMetadataConverter.getOffset;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.FixedBinaryTestUtils;
+import org.apache.parquet.Version;
+import org.apache.parquet.bytes.BytesUtils;
+import org.apache.parquet.column.ColumnDescriptor;
+import org.apache.parquet.column.Encoding;
+import org.apache.parquet.column.EncodingStats;
+import org.apache.parquet.column.ParquetProperties;
+import org.apache.parquet.column.statistics.BinaryStatistics;
+import org.apache.parquet.column.statistics.BooleanStatistics;
+import org.apache.parquet.column.statistics.DoubleStatistics;
+import org.apache.parquet.column.statistics.FloatStatistics;
+import org.apache.parquet.column.statistics.IntStatistics;
+import org.apache.parquet.column.statistics.LongStatistics;
+import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.example.Paper;
+import org.apache.parquet.format.ColumnChunk;
+import org.apache.parquet.format.ColumnMetaData;
+import org.apache.parquet.format.ConvertedType;
+import org.apache.parquet.format.DecimalType;
+import org.apache.parquet.format.FieldRepetitionType;
+import org.apache.parquet.format.FileMetaData;
+import org.apache.parquet.format.LogicalType;
+import org.apache.parquet.format.MapType;
+import org.apache.parquet.format.PageHeader;
+import org.apache.parquet.format.PageType;
+import org.apache.parquet.format.RowGroup;
+import org.apache.parquet.format.SchemaElement;
+import org.apache.parquet.format.StringType;
+import org.apache.parquet.format.Type;
+import org.apache.parquet.format.Util;
+import org.apache.parquet.hadoop.metadata.BlockMetaData;
+import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
+import org.apache.parquet.hadoop.metadata.ColumnPath;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.internal.column.columnindex.BoundaryOrder;
+import org.apache.parquet.internal.column.columnindex.ColumnIndex;
+import org.apache.parquet.internal.column.columnindex.ColumnIndexBuilder;
+import org.apache.parquet.internal.column.columnindex.OffsetIndex;
+import org.apache.parquet.internal.column.columnindex.OffsetIndexBuilder;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.ColumnOrder;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
+import org.apache.parquet.schema.LogicalTypeAnnotation.MapKeyValueTypeAnnotation;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
+import org.apache.parquet.schema.Type.Repetition;
+import org.apache.parquet.schema.Types;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -65,56 +91,37 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
-import com.google.common.collect.Sets;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.UTF8;
-import org.apache.parquet.Version;
-import org.apache.parquet.bytes.BytesUtils;
-import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.column.ParquetProperties;
-import org.apache.parquet.column.statistics.BinaryStatistics;
-import org.apache.parquet.column.statistics.BooleanStatistics;
-import org.apache.parquet.column.statistics.DoubleStatistics;
-import org.apache.parquet.column.statistics.FloatStatistics;
-import org.apache.parquet.column.statistics.IntStatistics;
-import org.apache.parquet.column.statistics.LongStatistics;
-import org.apache.parquet.column.statistics.Statistics;
-import org.apache.parquet.format.DecimalType;
-import org.apache.parquet.format.LogicalType;
-import org.apache.parquet.hadoop.metadata.BlockMetaData;
-import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
-import org.apache.parquet.hadoop.metadata.ColumnPath;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.apache.parquet.hadoop.metadata.ParquetMetadata;
-import org.apache.parquet.internal.column.columnindex.BoundaryOrder;
-import org.apache.parquet.internal.column.columnindex.ColumnIndex;
-import org.apache.parquet.internal.column.columnindex.ColumnIndexBuilder;
-import org.apache.parquet.internal.column.columnindex.OffsetIndex;
-import org.apache.parquet.internal.column.columnindex.OffsetIndexBuilder;
-import org.apache.parquet.io.api.Binary;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.LogicalTypeAnnotation;
-import org.junit.Assert;
-import org.junit.Test;
-import org.apache.parquet.example.Paper;
-import org.apache.parquet.format.ColumnChunk;
-import org.apache.parquet.format.ColumnMetaData;
-import org.apache.parquet.format.ConvertedType;
-import org.apache.parquet.format.FieldRepetitionType;
-import org.apache.parquet.format.FileMetaData;
-import org.apache.parquet.format.PageHeader;
-import org.apache.parquet.format.PageType;
-import org.apache.parquet.format.RowGroup;
-import org.apache.parquet.format.SchemaElement;
-import org.apache.parquet.format.Type;
-import org.apache.parquet.schema.ColumnOrder;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
-import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
-import org.apache.parquet.schema.Type.Repetition;
-import org.apache.parquet.schema.Types;
-
-import com.google.common.collect.Lists;
+import static java.util.Collections.emptyList;
+import static org.apache.parquet.format.CompressionCodec.UNCOMPRESSED;
+import static org.apache.parquet.format.Type.INT32;
+import static org.apache.parquet.format.Util.readPageHeader;
+import static org.apache.parquet.format.Util.writePageHeader;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.filterFileMetaDataByMidpoint;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.filterFileMetaDataByStart;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.getOffset;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MICROS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.MILLIS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit.NANOS;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.bsonType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.dateType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.decimalType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.enumType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.intType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.jsonType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.listType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.mapType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.stringType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.timeType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.timestampType;
+import static org.apache.parquet.schema.LogicalTypeAnnotation.uuidType;
+import static org.apache.parquet.schema.MessageTypeParser.parseMessageType;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class TestParquetMetadataConverter {
   private static SecureRandom random = new SecureRandom();
@@ -173,6 +180,65 @@ public class TestParquetMetadataConverter {
             .setPrecision(9).setScale(2)
     );
     Assert.assertEquals(expected, schemaElements);
+  }
+
+  @Test
+  public void testParquetMetadataConverterWithDictionary()
+    throws IOException {
+    ParquetMetadata parquetMetaData =
+      createParquetMetaData(Encoding.PLAIN_DICTIONARY, Encoding.PLAIN);
+
+    ParquetMetadataConverter converter = new ParquetMetadataConverter();
+    FileMetaData fmd1 = converter.toParquetMetadata(1, parquetMetaData);
+
+    // Flag should be true
+    fmd1.row_groups.forEach(rowGroup -> rowGroup.columns.forEach(column -> {
+      assertTrue(column.meta_data.isSetDictionary_page_offset());
+    }));
+
+    ByteArrayOutputStream metaDataOutputStream = new ByteArrayOutputStream();
+    Util.writeFileMetaData(fmd1, metaDataOutputStream);
+    ByteArrayInputStream metaDataInputStream =
+      new ByteArrayInputStream(metaDataOutputStream.toByteArray());
+    FileMetaData fmd2 = Util.readFileMetaData(metaDataInputStream);
+    ParquetMetadata parquetMetaDataConverted =
+      converter.fromParquetMetadata(fmd2);
+
+    long dicOffsetOriginal =
+      parquetMetaData.getBlocks().get(0).getColumns().get(0)
+        .getDictionaryPageOffset();
+    long dicOffsetConverted =
+      parquetMetaDataConverted.getBlocks().get(0).getColumns().get(0)
+        .getDictionaryPageOffset();
+
+    Assert.assertEquals(dicOffsetOriginal, dicOffsetConverted);
+  }
+
+  @Test
+  public void testParquetMetadataConverterWithoutDictionary()
+    throws IOException {
+    ParquetMetadata parquetMetaData =
+      createParquetMetaData(null, Encoding.PLAIN);
+
+    ParquetMetadataConverter converter = new ParquetMetadataConverter();
+    FileMetaData fmd1 = converter.toParquetMetadata(1, parquetMetaData);
+
+    // Flag should be false
+    fmd1.row_groups.forEach(rowGroup -> rowGroup.columns.forEach(column -> {
+      assertFalse(column.meta_data.isSetDictionary_page_offset());
+    }));
+
+    ByteArrayOutputStream metaDataOutputStream = new ByteArrayOutputStream();
+    Util.writeFileMetaData(fmd1, metaDataOutputStream);
+    ByteArrayInputStream metaDataInputStream =
+      new ByteArrayInputStream(metaDataOutputStream.toByteArray());
+    FileMetaData fmd2 = Util.readFileMetaData(metaDataInputStream);
+    ParquetMetadata pmd2 = converter.fromParquetMetadata(fmd2);
+
+    long dicOffsetConverted =
+      pmd2.getBlocks().get(0).getColumns().get(0).getDictionaryPageOffset();
+
+    Assert.assertEquals(0, dicOffsetConverted);
   }
 
   @Test
@@ -259,6 +325,31 @@ public class TestParquetMetadataConverter {
   }
 
   @Test
+  public void testMapLogicalType() {
+    ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
+    MessageType expected = Types.buildMessage()
+      .requiredGroup().as(mapType())
+      .repeatedGroup().as(MapKeyValueTypeAnnotation.getInstance())
+      .required(BINARY).as(stringType()).named("key")
+      .required(PrimitiveTypeName.INT32).named("value")
+      .named("key_value")
+      .named("testMap")
+      .named("Message");
+
+    List<SchemaElement> parquetSchema = parquetMetadataConverter.toParquetSchema(expected);
+    assertEquals(5, parquetSchema.size());
+    assertEquals(new SchemaElement("Message").setNum_children(1), parquetSchema.get(0));
+    assertEquals(new SchemaElement("testMap").setRepetition_type(FieldRepetitionType.REQUIRED).setNum_children(1).setConverted_type(ConvertedType.MAP).setLogicalType(LogicalType.MAP(new MapType())), parquetSchema.get(1));
+    // PARQUET-1879 ensure that LogicalType is not written (null) but ConvertedType is MAP_KEY_VALUE for backwards-compatibility
+    assertEquals(new SchemaElement("key_value").setRepetition_type(FieldRepetitionType.REPEATED).setNum_children(2).setConverted_type(ConvertedType.MAP_KEY_VALUE).setLogicalType(null), parquetSchema.get(2));
+    assertEquals(new SchemaElement("key").setType(Type.BYTE_ARRAY).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(ConvertedType.UTF8).setLogicalType(LogicalType.STRING(new StringType())), parquetSchema.get(3));
+    assertEquals(new SchemaElement("value").setType(Type.INT32).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(null).setLogicalType(null), parquetSchema.get(4));
+
+    MessageType schema = parquetMetadataConverter.fromParquetSchema(parquetSchema, null);
+    assertEquals(expected, schema);
+  }
+
+  @Test
   public void testLogicalToConvertedTypeConversion() {
     ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
 
@@ -295,9 +386,11 @@ public class TestParquetMetadataConverter {
     assertEquals(ConvertedType.JSON, parquetMetadataConverter.convertToConvertedType(jsonType()));
     assertEquals(ConvertedType.BSON, parquetMetadataConverter.convertToConvertedType(bsonType()));
 
+    assertNull(parquetMetadataConverter.convertToConvertedType(uuidType()));
+
     assertEquals(ConvertedType.LIST, parquetMetadataConverter.convertToConvertedType(listType()));
     assertEquals(ConvertedType.MAP, parquetMetadataConverter.convertToConvertedType(mapType()));
-    assertEquals(ConvertedType.MAP_KEY_VALUE, parquetMetadataConverter.convertToConvertedType(LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance()));
+    assertEquals(ConvertedType.MAP_KEY_VALUE, parquetMetadataConverter.convertToConvertedType(MapKeyValueTypeAnnotation.getInstance()));
   }
 
   @Test
@@ -1043,13 +1136,41 @@ public class TestParquetMetadataConverter {
 
   private static Statistics<?> createStatsTyped(PrimitiveType type, BigInteger min, BigInteger max) {
     Statistics<?> stats = Statistics.createStats(type);
-    Binary minBinary = Binary.fromConstantByteArray(min.toByteArray());
-    Binary maxBinary = Binary.fromConstantByteArray(max.toByteArray());
+    Binary minBinary = FixedBinaryTestUtils.getFixedBinary(type, min);
+    Binary maxBinary = FixedBinaryTestUtils.getFixedBinary(type, max);
     stats.updateStats(maxBinary);
     stats.updateStats(minBinary);
     assertEquals(minBinary, stats.genericGetMin());
     assertEquals(maxBinary, stats.genericGetMax());
     return stats;
+  }
+
+  private static ParquetMetadata createParquetMetaData(Encoding dicEncoding,
+    Encoding dataEncoding) {
+    MessageType schema =
+      parseMessageType("message schema { optional int32 col (INT_32); }");
+    org.apache.parquet.hadoop.metadata.FileMetaData fileMetaData =
+      new org.apache.parquet.hadoop.metadata.FileMetaData(schema,
+        new HashMap<String, String>(), null);
+    List<BlockMetaData> blockMetaDataList = new ArrayList<BlockMetaData>();
+    BlockMetaData blockMetaData = new BlockMetaData();
+    EncodingStats.Builder builder = new EncodingStats.Builder();
+    if (dicEncoding!= null) {
+      builder.addDictEncoding(dicEncoding).build();
+    }
+    builder.addDataEncoding(dataEncoding);
+    EncodingStats es = builder.build();
+    Set<org.apache.parquet.column.Encoding> e =
+      new HashSet<org.apache.parquet.column.Encoding>();
+    PrimitiveTypeName t = PrimitiveTypeName.INT32;
+    ColumnPath p = ColumnPath.get("col");
+    CompressionCodecName c = CompressionCodecName.UNCOMPRESSED;
+    BinaryStatistics s = new BinaryStatistics();
+    ColumnChunkMetaData md =
+      ColumnChunkMetaData.get(p, t, c, es, e, s, 20, 30, 0, 0, 0);
+    blockMetaData.addColumn(md);
+    blockMetaDataList.add(blockMetaData);
+    return new ParquetMetadata(fileMetaData, blockMetaDataList);
   }
 
   private enum StatsHelper {
