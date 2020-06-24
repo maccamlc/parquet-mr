@@ -21,7 +21,6 @@ package org.apache.parquet.format.converter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.FixedBinaryTestUtils;
 import org.apache.parquet.Version;
 import org.apache.parquet.bytes.BytesUtils;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -50,7 +49,6 @@ import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SchemaElement;
 import org.apache.parquet.format.StringType;
 import org.apache.parquet.format.Type;
-import org.apache.parquet.format.Util;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnPath;
@@ -113,7 +111,6 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.mapType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.stringType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.timeType;
 import static org.apache.parquet.schema.LogicalTypeAnnotation.timestampType;
-import static org.apache.parquet.schema.LogicalTypeAnnotation.uuidType;
 import static org.apache.parquet.schema.MessageTypeParser.parseMessageType;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.junit.Assert.assertEquals;
@@ -180,65 +177,6 @@ public class TestParquetMetadataConverter {
             .setPrecision(9).setScale(2)
     );
     Assert.assertEquals(expected, schemaElements);
-  }
-
-  @Test
-  public void testParquetMetadataConverterWithDictionary()
-    throws IOException {
-    ParquetMetadata parquetMetaData =
-      createParquetMetaData(Encoding.PLAIN_DICTIONARY, Encoding.PLAIN);
-
-    ParquetMetadataConverter converter = new ParquetMetadataConverter();
-    FileMetaData fmd1 = converter.toParquetMetadata(1, parquetMetaData);
-
-    // Flag should be true
-    fmd1.row_groups.forEach(rowGroup -> rowGroup.columns.forEach(column -> {
-      assertTrue(column.meta_data.isSetDictionary_page_offset());
-    }));
-
-    ByteArrayOutputStream metaDataOutputStream = new ByteArrayOutputStream();
-    Util.writeFileMetaData(fmd1, metaDataOutputStream);
-    ByteArrayInputStream metaDataInputStream =
-      new ByteArrayInputStream(metaDataOutputStream.toByteArray());
-    FileMetaData fmd2 = Util.readFileMetaData(metaDataInputStream);
-    ParquetMetadata parquetMetaDataConverted =
-      converter.fromParquetMetadata(fmd2);
-
-    long dicOffsetOriginal =
-      parquetMetaData.getBlocks().get(0).getColumns().get(0)
-        .getDictionaryPageOffset();
-    long dicOffsetConverted =
-      parquetMetaDataConverted.getBlocks().get(0).getColumns().get(0)
-        .getDictionaryPageOffset();
-
-    Assert.assertEquals(dicOffsetOriginal, dicOffsetConverted);
-  }
-
-  @Test
-  public void testParquetMetadataConverterWithoutDictionary()
-    throws IOException {
-    ParquetMetadata parquetMetaData =
-      createParquetMetaData(null, Encoding.PLAIN);
-
-    ParquetMetadataConverter converter = new ParquetMetadataConverter();
-    FileMetaData fmd1 = converter.toParquetMetadata(1, parquetMetaData);
-
-    // Flag should be false
-    fmd1.row_groups.forEach(rowGroup -> rowGroup.columns.forEach(column -> {
-      assertFalse(column.meta_data.isSetDictionary_page_offset());
-    }));
-
-    ByteArrayOutputStream metaDataOutputStream = new ByteArrayOutputStream();
-    Util.writeFileMetaData(fmd1, metaDataOutputStream);
-    ByteArrayInputStream metaDataInputStream =
-      new ByteArrayInputStream(metaDataOutputStream.toByteArray());
-    FileMetaData fmd2 = Util.readFileMetaData(metaDataInputStream);
-    ParquetMetadata pmd2 = converter.fromParquetMetadata(fmd2);
-
-    long dicOffsetConverted =
-      pmd2.getBlocks().get(0).getColumns().get(0).getDictionaryPageOffset();
-
-    Assert.assertEquals(0, dicOffsetConverted);
   }
 
   @Test
@@ -385,8 +323,6 @@ public class TestParquetMetadataConverter {
     assertEquals(ConvertedType.INTERVAL, parquetMetadataConverter.convertToConvertedType(LogicalTypeAnnotation.IntervalLogicalTypeAnnotation.getInstance()));
     assertEquals(ConvertedType.JSON, parquetMetadataConverter.convertToConvertedType(jsonType()));
     assertEquals(ConvertedType.BSON, parquetMetadataConverter.convertToConvertedType(bsonType()));
-
-    assertNull(parquetMetadataConverter.convertToConvertedType(uuidType()));
 
     assertEquals(ConvertedType.LIST, parquetMetadataConverter.convertToConvertedType(listType()));
     assertEquals(ConvertedType.MAP, parquetMetadataConverter.convertToConvertedType(mapType()));
@@ -1136,8 +1072,8 @@ public class TestParquetMetadataConverter {
 
   private static Statistics<?> createStatsTyped(PrimitiveType type, BigInteger min, BigInteger max) {
     Statistics<?> stats = Statistics.createStats(type);
-    Binary minBinary = FixedBinaryTestUtils.getFixedBinary(type, min);
-    Binary maxBinary = FixedBinaryTestUtils.getFixedBinary(type, max);
+    Binary minBinary = Binary.fromConstantByteArray(min.toByteArray());
+    Binary maxBinary = Binary.fromConstantByteArray(max.toByteArray());
     stats.updateStats(maxBinary);
     stats.updateStats(minBinary);
     assertEquals(minBinary, stats.genericGetMin());
