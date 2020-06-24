@@ -514,6 +514,14 @@
     </plugins>
   </build>
 
+  <distributionManagement>
+    <repository>
+      <id>nexus-releases</id>
+      <name>The Tradedesk Release Repository</name>
+      <url>https://nexus.adsrvr.org/repository/ttd-release/</url>
+    </repository>
+  </distributionManagement>
+
   <profiles>
     <profile>
       <id>update-github-site</id>
