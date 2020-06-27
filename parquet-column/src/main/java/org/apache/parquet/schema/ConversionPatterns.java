@@ -71,7 +71,6 @@ public abstract class ConversionPatterns {
               new GroupType(
                       Repetition.REPEATED,
                       mapAlias,
-                      LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance(),
                       keyType)
       );
     } else {
@@ -85,7 +84,6 @@ public abstract class ConversionPatterns {
               new GroupType(
                       Repetition.REPEATED,
                       mapAlias,
-                      LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance(),
                       keyType,
                       valueType)
       );

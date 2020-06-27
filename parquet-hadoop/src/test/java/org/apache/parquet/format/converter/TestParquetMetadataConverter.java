@@ -1278,40 +1278,22 @@ public class TestParquetMetadataConverter {
   }
 
   @Test
-  public void testMapLogicalType() {
-    ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
-    MessageType expected = Types.buildMessage()
-      .requiredGroup().as(mapType())
-      .repeatedGroup().as(LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance())
-      .required(PrimitiveTypeName.BINARY).as(stringType()).named("key")
-      .required(PrimitiveTypeName.INT32).named("value")
-      .named("key_value")
-      .named("testMap")
-      .named("Message");
-
-    List<SchemaElement> parquetSchema = parquetMetadataConverter.toParquetSchema(expected);
-    assertEquals(5, parquetSchema.size());
-    assertEquals(new SchemaElement("Message").setNum_children(1), parquetSchema.get(0));
-    assertEquals(new SchemaElement("testMap").setRepetition_type(FieldRepetitionType.REQUIRED).setNum_children(1).setConverted_type(ConvertedType.MAP).setLogicalType(LogicalType.MAP(new MapType())), parquetSchema.get(1));
-    // PARQUET-1879 ensure that LogicalType is not written (null) but ConvertedType is MAP_KEY_VALUE for backwards-compatibility
-    assertEquals(new SchemaElement("key_value").setRepetition_type(FieldRepetitionType.REPEATED).setNum_children(2).setConverted_type(ConvertedType.MAP_KEY_VALUE).setLogicalType(null), parquetSchema.get(2));
-    assertEquals(new SchemaElement("key").setType(Type.BYTE_ARRAY).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(ConvertedType.UTF8).setLogicalType(LogicalType.STRING(new StringType())), parquetSchema.get(3));
-    assertEquals(new SchemaElement("value").setType(Type.INT32).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(null).setLogicalType(null), parquetSchema.get(4));
-
-    MessageType schema = parquetMetadataConverter.fromParquetSchema(parquetSchema, null);
-    assertEquals(expected, schema);
-  }
-
-  @Test
   public void testMapLogicalTypeReadWrite() throws Exception {
     MessageType messageType = Types.buildMessage()
-      .requiredGroup().as(mapType())
-      .repeatedGroup().as(LogicalTypeAnnotation.MapKeyValueTypeAnnotation.getInstance())
-      .required(PrimitiveTypeName.BINARY).as(stringType()).named("key")
-      .required(PrimitiveTypeName.INT64).named("value")
-      .named("key_value")
+      .map(Repetition.REQUIRED)
+      .key(PrimitiveTypeName.BINARY).as(stringType())
+      .requiredValue(PrimitiveTypeName.INT64)
       .named("testMap")
       .named("example");
+
+    List<SchemaElement> parquetSchema = new ParquetMetadataConverter().toParquetSchema(messageType);
+    assertEquals(5, parquetSchema.size());
+    assertEquals(new SchemaElement("example").setNum_children(1), parquetSchema.get(0));
+    assertEquals(new SchemaElement("testMap").setRepetition_type(FieldRepetitionType.REQUIRED).setNum_children(1).setConverted_type(ConvertedType.MAP).setLogicalType(LogicalType.MAP(new MapType())), parquetSchema.get(1));
+    // PARQUET-1879 ensure that LogicalType is not written (null) but ConvertedType is MAP_KEY_VALUE for backwards-compatibility
+    assertEquals(new SchemaElement("key_value").setRepetition_type(FieldRepetitionType.REPEATED).setNum_children(2).setConverted_type(null).setLogicalType(null), parquetSchema.get(2));
+    assertEquals(new SchemaElement("key").setType(Type.BYTE_ARRAY).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(ConvertedType.UTF8).setLogicalType(LogicalType.STRING(new StringType())), parquetSchema.get(3));
+    assertEquals(new SchemaElement("value").setType(Type.INT64).setRepetition_type(FieldRepetitionType.REQUIRED).setConverted_type(null).setLogicalType(null), parquetSchema.get(4));
 
     verifyMapMessageType(messageType, "key_value");
   }

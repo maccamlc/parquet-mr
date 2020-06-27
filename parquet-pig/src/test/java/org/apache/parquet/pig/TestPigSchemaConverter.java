@@ -143,7 +143,7 @@ public class TestPigSchemaConverter {
         "message pig_schema {\n" +
         "  optional binary a (UTF8);\n" +
         "  optional group b (MAP) {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required binary key (UTF8);\n" +
         "      optional group value {\n" +
         "        optional binary c (UTF8);\n" +
@@ -159,7 +159,7 @@ public class TestPigSchemaConverter {
     testConversion("a:map[int]",
         "message pig_schema {\n" +
         "  optional group a (MAP) {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required binary key (UTF8);\n" +
         "      optional int32 value;" +
         "    }\n" +
@@ -172,10 +172,10 @@ public class TestPigSchemaConverter {
     testConversion("a:map[map[int]]",
         "message pig_schema {\n" +
         "  optional group a (MAP) {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required binary key (UTF8);\n" +
         "      optional group value (MAP) {\n" +
-        "        repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "        repeated group key_value {\n" +
         "          required binary key (UTF8);\n" +
         "          optional int32 value;\n" +
         "        }\n" +
@@ -190,7 +190,7 @@ public class TestPigSchemaConverter {
     testConversion("a:map[bag{(a:int)}]",
         "message pig_schema {\n" +
         "  optional group a (MAP) {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required binary key (UTF8);\n" +
         "      optional group value (LIST) {\n" +
         "        repeated group bag {\n" +

@@ -43,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.CorruptStatistics;
 import org.apache.parquet.ParquetReadOptions;
+import org.apache.parquet.ParquetRuntimeException;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.column.statistics.BinaryStatistics;
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
@@ -282,7 +283,8 @@ public class ParquetMetadataConverter {
   }
 
   LogicalType convertToLogicalType(LogicalTypeAnnotation logicalTypeAnnotation) {
-    return logicalTypeAnnotation.accept(LOGICAL_TYPE_ANNOTATION_VISITOR).orElse(null);
+    return logicalTypeAnnotation.accept(LOGICAL_TYPE_ANNOTATION_VISITOR)
+      .orElseThrow(() -> new ParquetRuntimeException("Logical Type Annotation " + logicalTypeAnnotation + " is not supported"){});
   }
 
   ConvertedType convertToConvertedType(LogicalTypeAnnotation logicalTypeAnnotation) {
@@ -462,6 +464,11 @@ public class ParquetMetadataConverter {
 
     @Override
     public Optional<LogicalType> visit(LogicalTypeAnnotation.IntervalLogicalTypeAnnotation intervalLogicalType) {
+      return of(LogicalType.UNKNOWN(new NullType()));
+    }
+
+    @Override
+    public Optional<LogicalType> visit(LogicalTypeAnnotation.MapKeyValueTypeAnnotation mapKeyValueLogicalType) {
       return of(LogicalType.UNKNOWN(new NullType()));
     }
   }

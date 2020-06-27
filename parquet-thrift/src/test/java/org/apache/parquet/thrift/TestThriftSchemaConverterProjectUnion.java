@@ -308,7 +308,7 @@ public class TestThriftSchemaConverterProjectUnion {
         "optMapWithUnionKey.key",
         "message ParquetSchema {\n" +
         "  optional group optMapWithUnionKey (MAP) = 1 {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required group key {\n" +
         "        optional group structV3 = 1 {\n" +
         "          required binary name (UTF8) = 1;\n" +
@@ -341,7 +341,7 @@ public class TestThriftSchemaConverterProjectUnion {
         "optMapWithUnionKey.{key,value.gender}",
         "message ParquetSchema {\n" +
         "  optional group optMapWithUnionKey (MAP) = 1 {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required group key {\n" +
         "        optional group structV3 = 1 {\n" +
         "          required binary name (UTF8) = 1;\n" +
@@ -377,7 +377,7 @@ public class TestThriftSchemaConverterProjectUnion {
         "optMapWithUnionValue.{key,value.structV4.addedStruct.gender}",
         "message ParquetSchema {\n" +
         "  optional group optMapWithUnionValue (MAP) = 1 {\n" +
-        "    repeated group key_value (MAP_KEY_VALUE) {\n" +
+        "    repeated group key_value {\n" +
         "      required group key {\n" +
         "        required binary name (UTF8) = 1;\n" +
         "        optional binary age (UTF8) = 2;\n" +

@@ -19,6 +19,7 @@
 package org.apache.hadoop.hive.ql.io.parquet;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -111,7 +112,7 @@ public class TestHiveSchemaConverter {
             "map<string,string>",
             "message hive_schema {\n"
             + "  optional group mapCol (MAP) {\n"
-            + "    repeated group key_value (MAP_KEY_VALUE) {\n"
+            + "    repeated group key_value {\n"
             + "      required binary key;\n"
             + "      optional binary value;\n"
             + "    }\n"
@@ -137,7 +138,7 @@ public class TestHiveSchemaConverter {
     org.apache.parquet.schema.Type secondLevel = topLevel.asGroupType().getFields().get(0);
     //there is one repeated field for mapCol, the field name is "map" and its original Type is MAP_KEY_VALUE;
     assertEquals("key_value", secondLevel.getName());
-    assertEquals(OriginalType.MAP_KEY_VALUE, secondLevel.getOriginalType());
+    assertNull(secondLevel.getOriginalType());
     assertEquals(Repetition.REPEATED, secondLevel.getRepetition());
   }
 }
